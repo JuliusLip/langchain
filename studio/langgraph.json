@@ -1,0 +1,14 @@
+{
+  "dockerfile_lines": [
+    "COPY chinook.db chinook.db"
+  ],
+  "graphs": {
+    "sql_chain": "./sql_chain.py:graph",
+    "sql_agent": "./sql_agent.py:graph"
+  },
+  "env": "./.env",
+  "python_version": "3.12",
+  "dependencies": [
+    "."
+  ]
+}

@@ -1,16 +1,13 @@
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
-from typing_extensions import TypedDict, Annotated
+from langchain_openai import ChatOpenAI
+from typing_extensions import TypedDict
 from langchain import hub
+from typing_extensions import Annotated
 from langchain_community.tools.sql_database.tool import QuerySQLDatabaseTool
 from langgraph.graph import START, StateGraph
-# from langgraph.checkpoint.memory import MemorySaver
-
-# Load environment variables from .env file
-load_dotenv()
 
 
+# Define a State class to preserve all the required valriables accross the steps
 class State(TypedDict):
     question: str
     query: str
@@ -18,11 +15,13 @@ class State(TypedDict):
     answer: str
 
 
+# Create a function for SQL queries generation
 class QueryOutput(TypedDict):
     """Generated SQL query."""
     query: Annotated[str, ..., "Syntactically valid SQL query."]
 
 
+# Create a function for SQL queries generation
 def write_query(state: State):
     """Generate SQL query to fetch information."""
     prompt = query_prompt_template.invoke(
@@ -35,15 +34,18 @@ def write_query(state: State):
     )
     structured_llm = llm.with_structured_output(QueryOutput)
     result = structured_llm.invoke(prompt)
+    
     return {"query": result["query"]}
 
 
+# Create a function for query executing
 def execute_query(state: State):
     """Execute SQL query."""
     execute_query_tool = QuerySQLDatabaseTool(db=db)
     return {"result": execute_query_tool.invoke(state["query"])}
 
 
+# Create a function for answer generation
 def generate_answer(state: State):
     """Answer question using retrieved information as context."""
     prompt = (
@@ -56,45 +58,22 @@ def generate_answer(state: State):
     response = llm.invoke(prompt)
     return {"answer": response.content}
 
+
+# Define the database URI
+db_uri = "sqlite:///chinook.db"
+
+# Create a database object
+db = SQLDatabase.from_uri(db_uri)
+
+# Instantiate LLM model
 llm = ChatOpenAI(model="gpt-4o-mini")
 
-db = SQLDatabase.from_uri("sqlite:///Chinook.db")
-
+# Pull the prebuilt prompt template for sql query generation
 query_prompt_template = hub.pull("langchain-ai/sql-query-system-prompt")
 
+# Build a LangGraph graph (chain) by adding all the steps into the sequence
 graph_builder = StateGraph(State).add_sequence(
     [write_query, execute_query, generate_answer]
 )
 graph_builder.add_edge(START, "write_query")
 graph = graph_builder.compile()
-
-for step in graph.stream(
-    {"question": "How many employees are there?"}, stream_mode="updates"
-):
-    print(step)
-
-# memory = MemorySaver()
-# graph = graph_builder.compile(checkpointer=memory, interrupt_before=["execute_query"])
-
-# # Now that we're using persistence, we need to specify a thread ID
-# # so that we can continue the run after review.
-# config = {"configurable": {"thread_id": "1"}}
-
-# for step in graph.stream(
-#     {"question": "How many employees are there?"},
-#     config,
-#     stream_mode="updates",
-# ):
-#     print(step)
-
-# try:
-#     user_approval = input("Do you want to go to execute query? (yes/no): ")
-# except Exception:
-#     user_approval = "no"
-
-# if user_approval.lower() == "yes":
-#     # If approved, continue the graph execution
-#     for step in graph.stream(None, config, stream_mode="updates"):
-#         print(step)
-# else:
-#     print("Operation cancelled by user.")
