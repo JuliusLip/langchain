@@ -3,3 +3,4 @@ langgraph
 langchain-community
 langchain-openai
 python-dotenv
+streamlit
